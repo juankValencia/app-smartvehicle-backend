@@ -1,7 +1,7 @@
-import {Entity, model, property, belongsTo, hasOne} from '@loopback/repository';
-import {Cliente} from './cliente.model';
-import {Asesor} from './asesor.model';
+import {belongsTo, Entity, hasOne, model, property} from '@loopback/repository';
 import {Administrador} from './administrador.model';
+import {Asesor} from './asesor.model';
+import {Cliente} from './cliente.model';
 import {Vehiculo} from './vehiculo.model';
 
 @model()
@@ -39,6 +39,7 @@ export class Solicitud extends Entity {
 
   @property({
     type: 'string',
+    required: false,
   })
   vehiculoId?: string;
 

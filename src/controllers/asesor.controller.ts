@@ -1,30 +1,60 @@
+import {authenticate} from '@loopback/authentication';
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
   Filter,
   FilterExcludingWhere,
   repository,
-  Where,
+  Where
 } from '@loopback/repository';
 import {
-  post,
-  param,
-  get,
-  getModelSchemaRef,
-  patch,
-  put,
-  del,
-  requestBody,
-  response,
+  del, get,
+  getModelSchemaRef, HttpErrors, param, patch, post, put, requestBody,
+  response
 } from '@loopback/rest';
+import {Llaves} from '../config/llaves';
 import {Asesor} from '../models';
+import {Credenciales} from '../models/credenciales.model';
 import {AsesorRepository} from '../repositories';
+import {autenticacionService} from '../services';
+const fetch = require("node-fetch");
 
+@authenticate("admin")
 export class AsesorController {
   constructor(
     @repository(AsesorRepository)
-    public asesorRepository : AsesorRepository,
-  ) {}
+    public asesorRepository: AsesorRepository,
+    @service(autenticacionService)
+    public servicioAutenticacion: autenticacionService
+  ) { }
+
+  @authenticate.skip()
+  @post("/IdentificarAsesor", {
+    responses: {
+      "200": {
+        description: "Identificacion de usuario"
+      }
+    }
+  })
+  async identificarAdmin(
+    @requestBody() credenciales: Credenciales
+  ) {
+    let p = await this.servicioAutenticacion.IdentificarAsesor(credenciales.usuario, credenciales.contrasena);
+    if (p) {
+      let token = this.servicioAutenticacion.GenerarTokenAsesorJWT(p);
+      return {
+        datos: {
+          nombre: p.nombres,
+          correo: p.correo,
+          id: p.id
+        },
+        tk: token
+      }
+    } else {
+      throw new HttpErrors[401]("Datos inválidos - No existe");
+    }
+  }
 
   @post('/asesors')
   @response(200, {
@@ -44,7 +74,25 @@ export class AsesorController {
     })
     asesor: Omit<Asesor, 'id'>,
   ): Promise<Asesor> {
-    return this.asesorRepository.create(asesor);
+    let claves = this.servicioAutenticacion.generarClave();
+    let claveCifradas = this.servicioAutenticacion.cifrarClave(claves);
+
+    asesor.contrasena = claveCifradas;
+    let p = await this.asesorRepository.create(asesor);
+
+    //notificar por correo
+    let Correo = asesor.correo;
+    let Asunto = "Registrado en Smart Vehicle";
+    let Contenido = `Hola ${asesor.nombres}, los datos de su cuenta en Smart Vehicle son:\n\n Usuario: ${asesor.correo}\n y Contraseña: ${claves}`;
+
+    fetch(`${Llaves.urlNotificaciones}/email?Correo=${Correo}&Asunto=${Asunto}&Contenido=${Contenido}`)
+      .then(
+        (data: any) => {
+          console.log(data);
+        }
+      )
+
+    return p;
   }
 
   @get('/asesors/count')

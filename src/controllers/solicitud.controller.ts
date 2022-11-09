@@ -1,31 +1,28 @@
+import {authenticate} from '@loopback/authentication';
 import {
   Count,
   CountSchema,
   Filter,
   FilterExcludingWhere,
   repository,
-  Where,
+  Where
 } from '@loopback/repository';
 import {
-  post,
-  param,
-  get,
-  getModelSchemaRef,
-  patch,
-  put,
-  del,
-  requestBody,
-  response,
+  del, get,
+  getModelSchemaRef, param, patch, post, put, requestBody,
+  response
 } from '@loopback/rest';
 import {Solicitud} from '../models';
 import {SolicitudRepository} from '../repositories';
 
+@authenticate("admin")
 export class SolicitudController {
   constructor(
     @repository(SolicitudRepository)
-    public solicitudRepository : SolicitudRepository,
-  ) {}
+    public solicitudRepository: SolicitudRepository,
+  ) { }
 
+  @authenticate("cliente")
   @post('/solicituds')
   @response(200, {
     description: 'Solicitud model instance',
@@ -47,6 +44,7 @@ export class SolicitudController {
     return this.solicitudRepository.create(solicitud);
   }
 
+  @authenticate.skip()
   @get('/solicituds/count')
   @response(200, {
     description: 'Solicitud model count',
@@ -95,6 +93,7 @@ export class SolicitudController {
     return this.solicitudRepository.updateAll(solicitud, where);
   }
 
+  @authenticate("cliente")
   @get('/solicituds/{id}')
   @response(200, {
     description: 'Solicitud model instance',
@@ -140,6 +139,7 @@ export class SolicitudController {
     await this.solicitudRepository.replaceById(id, solicitud);
   }
 
+  @authenticate("Asesor")
   @del('/solicituds/{id}')
   @response(204, {
     description: 'Solicitud DELETE success',

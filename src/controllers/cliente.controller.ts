@@ -1,30 +1,60 @@
+import {authenticate} from '@loopback/authentication';
+import {service} from '@loopback/core';
 import {
   Count,
   CountSchema,
   Filter,
   FilterExcludingWhere,
   repository,
-  Where,
+  Where
 } from '@loopback/repository';
 import {
-  post,
-  param,
-  get,
-  getModelSchemaRef,
-  patch,
-  put,
-  del,
-  requestBody,
-  response,
+  del, get,
+  getModelSchemaRef, HttpErrors, param, patch, post, put, requestBody,
+  response
 } from '@loopback/rest';
+import {Llaves} from '../config/llaves';
 import {Cliente} from '../models';
+import {Credenciales} from '../models/credenciales.model';
 import {ClienteRepository} from '../repositories';
+import {autenticacionService} from '../services';
+const fetch = require("node-fetch");
 
+@authenticate("admin")
 export class ClienteController {
   constructor(
     @repository(ClienteRepository)
-    public clienteRepository : ClienteRepository,
-  ) {}
+    public clienteRepository: ClienteRepository,
+    @service(autenticacionService)
+    public servicioAutenticacion: autenticacionService
+  ) { }
+
+  @authenticate.skip()
+  @post("/IdentificarCliente", {
+    responses: {
+      "200": {
+        description: "Identificacion de usuario"
+      }
+    }
+  })
+  async identificarCliente(
+    @requestBody() credenciales: Credenciales
+  ) {
+    let p = await this.servicioAutenticacion.IdentificarCliente(credenciales.usuario, credenciales.contrasena);
+    if (p) {
+      let token = this.servicioAutenticacion.GenerarTokenClienteJWT(p);
+      return {
+        datos: {
+          nombre: p.nombres,
+          correo: p.correo,
+          id: p.id
+        },
+        tk: token
+      }
+    } else {
+      throw new HttpErrors[401]("Datos inválidos - No existe");
+    }
+  }
 
   @post('/clientes')
   @response(200, {
@@ -44,7 +74,25 @@ export class ClienteController {
     })
     cliente: Omit<Cliente, 'id'>,
   ): Promise<Cliente> {
-    return this.clienteRepository.create(cliente);
+    let claves = this.servicioAutenticacion.generarClave();
+    let claveCifradas = this.servicioAutenticacion.cifrarClave(claves);
+
+    cliente.contrasena = claveCifradas;
+    let p = await this.clienteRepository.create(cliente);
+
+    //notificar por correo
+    let Correo = cliente.correo;
+    let Asunto = "Registrado en Smart Vehicle";
+    let Contenido = `Hola ${cliente.nombres}, los datos de su cuenta en Smart Vehicle son:\n\n Usuario: ${cliente.correo}\n y Contraseña: ${claves}`;
+
+    fetch(`${Llaves.urlNotificaciones}/email?Correo=${Correo}&Asunto=${Asunto}&Contenido=${Contenido}`)
+      .then(
+        (data: any) => {
+          console.log(data);
+        }
+      )
+
+    return p;
   }
 
   @get('/clientes/count')
@@ -58,6 +106,7 @@ export class ClienteController {
     return this.clienteRepository.count(where);
   }
 
+  @authenticate("asesor")
   @get('/clientes')
   @response(200, {
     description: 'Array of Cliente model instances',
